@@ -10,20 +10,23 @@ export const generateLevel = async (difficulty: number = 1): Promise<LevelData> 
 
   const systemInstruction = `
     You are a game designer for a 5-year-old's puzzle game. 
-    Create a 5x5 hexagonal grid pathfinding level.
-    The grid contains integers representing movement cost.
-    Start is at bottom-left [4,0] (value must be 0).
-    End is at top-right [0,4] (value must be 0).
+    Create a hexagonal grid pathfinding level.
+    The grid can be slightly jagged (rows having different counts) or rectangular (5x5, 6x5, etc).
+    The grid contains integers representing movement cost (1-8).
+    
+    You must provide:
+    1. grid: 2D array of costs.
+    2. start: {row, col} coordinate.
+    3. end: {row, col} coordinate.
+    4. budget: Tight but fair budget.
     
     Rules:
-    - Costs should be between 1 and 8 (except start/end).
-    - There MUST be at least one valid path from Start to End with total cost <= budget.
-    - The budget should be tight but fair for a child (allow for 2-3 extra cost mistakes).
-    - Higher difficulty means tighter budget and more obstacles (high cost cells).
+    - start and end values in the grid MUST be 0.
+    - There MUST be a valid path from Start to End.
   `;
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: "gemini-3-flash-preview",
     config: {
       systemInstruction: systemInstruction,
       responseMimeType: "application/json",
@@ -32,16 +35,29 @@ export const generateLevel = async (difficulty: number = 1): Promise<LevelData> 
         properties: {
           grid: {
             type: Type.ARRAY,
-            description: "5x5 integer array. grid[0][0] is top left.",
             items: {
               type: Type.ARRAY,
               items: { type: Type.INTEGER }
             }
           },
-          budget: { type: Type.INTEGER, description: "Total budget available." },
-          description: { type: Type.STRING, description: "Short fun name for the level." }
+          start: {
+            type: Type.OBJECT,
+            properties: {
+              row: { type: Type.INTEGER },
+              col: { type: Type.INTEGER }
+            }
+          },
+          end: {
+            type: Type.OBJECT,
+            properties: {
+              row: { type: Type.INTEGER },
+              col: { type: Type.INTEGER }
+            }
+          },
+          budget: { type: Type.INTEGER },
+          description: { type: Type.STRING }
         },
-        required: ["grid", "budget"]
+        required: ["grid", "budget", "start", "end"]
       }
     },
     contents: `Generate a level with difficulty ${difficulty} (1-5 scale).`,
@@ -53,16 +69,16 @@ export const generateLevel = async (difficulty: number = 1): Promise<LevelData> 
 
   const data = JSON.parse(response.text);
   
-  // Force start/end to 0 just in case AI missed it
-  if (data.grid && data.grid.length === 5) {
-    data.grid[4][0] = 0;
-    data.grid[0][4] = 0;
-  }
+  // Sanity check for start/end
+  if (data.grid[data.start.row]) data.grid[data.start.row][data.start.col] = 0;
+  if (data.grid[data.end.row]) data.grid[data.end.row][data.end.col] = 0;
 
   return {
     id: `ai-${Date.now()}`,
     grid: data.grid,
     budget: data.budget,
+    start: data.start,
+    end: data.end,
     description: data.description || "AI Mystery Map"
   };
 };

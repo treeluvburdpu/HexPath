@@ -10,9 +10,18 @@ export interface HexData {
 
 export interface LevelData {
   id: string | number;
-  grid: number[][]; // 5x5 matrix of costs
+  grid: number[][]; // Flexible matrix of costs
   budget: number;
   description?: string;
+  start?: Coordinate; // Optional custom start
+  end?: Coordinate;   // Optional custom end
+}
+
+export interface GameLogEntry {
+  levelId: string | number;
+  levelName: string;
+  remainingBudget: number;
+  timestamp: number;
 }
 
 export enum GameStatus {

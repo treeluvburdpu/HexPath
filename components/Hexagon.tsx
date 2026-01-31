@@ -9,7 +9,6 @@ interface HexagonProps {
   isStart: boolean;
   isEnd: boolean;
   isWalkable: boolean;
-  showHeatmap: boolean;
   onClick: () => void;
 }
 
@@ -20,7 +19,6 @@ const Hexagon: React.FC<HexagonProps> = ({
   isStart,
   isEnd,
   isWalkable,
-  showHeatmap,
   onClick
 }) => {
   const { row, col } = data.coord;
@@ -38,15 +36,6 @@ const Hexagon: React.FC<HexagonProps> = ({
   let strokeWidth = 2;
   let textColor = '#ffffff';
 
-  // Heatmap logic
-  const getHeatmapColor = (cost: number) => {
-    if (cost === 0) return 'transparent';
-    const t = Math.min((cost - 1) / 7, 1); 
-    // Hue from 120 (Green) to 0 (Red)
-    const hue = 120 - (t * 120); 
-    return `hsla(${hue}, 80%, 50%, 0.4)`;
-  };
-
   if (isStart) {
     fillColor = 'rgba(252, 211, 77, 0.6)'; // Yellow-300 transparent
     strokeColor = '#FCD34D';
@@ -56,12 +45,9 @@ const Hexagon: React.FC<HexagonProps> = ({
     strokeColor = '#4ADE80';
     strokeWidth = 3;
   } else if (isSelected) {
-    // 30% more transparent than previous 0.6 -> 0.3
     fillColor = 'rgba(96, 165, 250, 0.3)'; // Blue-400 very transparent
     strokeColor = '#60A5FA';
     textColor = '#ffffff';
-  } else if (showHeatmap) {
-    fillColor = getHeatmapColor(data.cost);
   }
 
   // Interactive states

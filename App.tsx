@@ -1,82 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { GoogleGenAI } from "@google/genai";
+
+import React, { useState, useEffect, useMemo } from 'react';
 import HexGrid from './components/HexGrid';
-import { LevelData, Coordinate, GameStatus } from './types';
-import { INITIAL_LEVELS, START_POS, END_POS } from './constants';
+import { LevelData, Coordinate, GameStatus, GameLogEntry } from './types';
+import { INITIAL_LEVELS, DEFAULT_START, DEFAULT_END } from './constants';
 import { isSameCoord } from './utils/hexUtils';
 import { findMinPathCost } from './utils/pathfinding';
 import { generateLevel } from './services/geminiService';
-import { RotateCcw, Flame, Trophy, AlertCircle, Play, Wand2 } from 'lucide-react';
+import { RotateCcw, Flame, Trophy, AlertCircle, Play, Wand2, Mountain, ScrollText, History, Star } from 'lucide-react';
 
-const BUFFER_COST = 2; // Configurable integer buffer
+const BUFFER_COST = 2; 
 
 const App: React.FC = () => {
-  const [levels] = useState<LevelData[]>(INITIAL_LEVELS);
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [currentLevel, setCurrentLevel] = useState<LevelData>(INITIAL_LEVELS[0]);
   
-  const [path, setPath] = useState<Coordinate[]>([START_POS]);
+  const [path, setPath] = useState<Coordinate[]>([]);
   const [currentBudget, setCurrentBudget] = useState(0);
   const [initialBudget, setInitialBudget] = useState(0);
   const [status, setStatus] = useState<GameStatus>(GameStatus.PLAYING);
-  const [showHeatmap, setShowHeatmap] = useState(false);
+  
+  const [viewMode, setViewMode] = useState<'none' | 'heat' | 'topo'>('none');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  // Persistence State
+  const [totalScore, setTotalScore] = useState(0);
+  const [gameLog, setGameLog] = useState<GameLogEntry[]>([]);
+
+  const startPos = useMemo(() => currentLevel.start || DEFAULT_START(currentLevel.grid.length), [currentLevel]);
+  const endPos = useMemo(() => currentLevel.end || DEFAULT_END(Math.max(...currentLevel.grid.map(r => r.length))), [currentLevel]);
+
   // Initialize level state when level object changes
   useEffect(() => {
-    // Calculate budget dynamically
-    const minCost = findMinPathCost(currentLevel.grid);
+    const minCost = findMinPathCost(currentLevel.grid, startPos, endPos);
     if (minCost === -1) {
       setErrorMsg("Error: Level is unsolvable!");
-      // In production, we might auto-skip or regen here
     }
     const safeBudget = minCost === -1 ? 20 : minCost + BUFFER_COST;
     
     setInitialBudget(safeBudget);
     setCurrentBudget(safeBudget);
-    setPath([START_POS]);
+    setPath([startPos]);
     setStatus(GameStatus.PLAYING);
     setErrorMsg(null);
-  }, [currentLevel]);
+  }, [currentLevel, startPos, endPos]);
 
   const handleCellClick = (coord: Coordinate, cost: number) => {
     if (status !== GameStatus.PLAYING) return;
 
-    // Check if clicking on an existing path node (Backtracking/Deselecting)
     const existingIndex = path.findIndex(p => isSameCoord(p, coord));
-
     if (existingIndex !== -1) {
-      // Cannot deselect the start node
       if (existingIndex === 0) return;
-
-      // Slice the path to remove the clicked node and everything after it
-      // The path becomes [0 ... existingIndex-1]
-      // "Deselect IT" -> it is gone.
       const newPath = path.slice(0, existingIndex);
       setPath(newPath);
-
-      // Recalculate budget based on new path
-      // Start node (index 0) has 0 cost usually, or is not counted as a 'step cost'
-      // Iterate from index 1 to end of newPath
-      const costUsed = newPath.slice(1).reduce((acc, curr) => {
-        return acc + currentLevel.grid[curr.row][curr.col];
-      }, 0);
-
+      const costUsed = newPath.slice(1).reduce((acc, curr) => acc + currentLevel.grid[curr.row][curr.col], 0);
       setCurrentBudget(initialBudget - costUsed);
-      
-      // If we were effectively "done" but user clicked back, ensure status is playing
-      // though typically you can't click after winning unless we allow it.
-      // GameStatus.WON usually stops interactions. But if logic allows, we reset to PLAYING.
-      // Current check `if (status !== GameStatus.PLAYING) return;` prevents clicking after win.
-      // User must reset to play again. This is fine.
-      
       return;
     }
 
-    // Normal Movement Logic (Adding a step)
-
-    // Budget check
     if (currentBudget - cost < 0) {
       shakeScreen();
       setErrorMsg("Not enough budget!");
@@ -86,17 +67,19 @@ const App: React.FC = () => {
 
     const newBudget = currentBudget - cost;
     const newPath = [...path, coord];
-    
     setPath(newPath);
     setCurrentBudget(newBudget);
 
-    // Win Check
-    if (isSameCoord(coord, END_POS)) {
+    if (isSameCoord(coord, endPos)) {
       setStatus(GameStatus.WON);
-    } 
-    // Loss check if stuck (simplified: just rely on reset button if stuck, 
-    // or budget 0 but not at end)
-    else if (newBudget === 0) {
+      setTotalScore(prev => prev + newBudget);
+      setGameLog(prev => [{
+        levelId: currentLevel.id,
+        levelName: currentLevel.description || "Unnamed Map",
+        remainingBudget: newBudget,
+        timestamp: Date.now()
+      }, ...prev]);
+    } else if (newBudget === 0) {
       setStatus(GameStatus.LOST);
     }
   };
@@ -111,31 +94,27 @@ const App: React.FC = () => {
 
   const nextLevel = () => {
     const nextIdx = currentLevelIndex + 1;
-    if (nextIdx < levels.length) {
+    if (nextIdx < INITIAL_LEVELS.length && currentLevelIndex !== -1) {
       setCurrentLevelIndex(nextIdx);
-      setCurrentLevel(levels[nextIdx]);
+      setCurrentLevel(INITIAL_LEVELS[nextIdx]);
     } else {
       generateAILevel();
     }
   };
 
   const resetLevel = () => {
-    setPath([START_POS]);
+    setPath([startPos]);
     setCurrentBudget(initialBudget);
     setStatus(GameStatus.PLAYING);
     setErrorMsg(null);
   };
 
   const startOver = () => {
-    if (window.confirm("Restart game from Level 1?")) {
-      // If we are already on level 1, the useEffect won't fire because the level object hasn't changed.
-      // We must manually reset the level state.
-      if (currentLevelIndex === 0) {
-        resetLevel();
-      } else {
-        setCurrentLevelIndex(0);
-        setCurrentLevel(INITIAL_LEVELS[0]);
-      }
+    if (window.confirm("Restart journey from Level 1?")) {
+      setTotalScore(0);
+      setGameLog([]);
+      setCurrentLevelIndex(0);
+      setCurrentLevel(INITIAL_LEVELS[0]);
     }
   };
 
@@ -148,139 +127,152 @@ const App: React.FC = () => {
       setIsGenerating(false);
     } catch (e) {
       console.error(e);
-      setErrorMsg("Could not generate level. Check API Key.");
+      setErrorMsg("Could not generate level.");
       setIsGenerating(false);
     }
   };
 
+  const toggleViewMode = (mode: 'heat' | 'topo') => {
+    setViewMode(prev => prev === mode ? 'none' : mode);
+  };
+
   return (
-    <div className="h-screen w-screen bg-black flex flex-col relative overflow-hidden font-sans">
+    <div className="h-screen w-screen bg-black flex overflow-hidden font-sans text-white">
       
-      {/* Background Budget Number - Behind everything */}
-      <div 
-        className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0"
-        aria-hidden="true"
-      >
-        <span 
-          className={`text-[40vh] font-bold leading-none transition-colors duration-500 ${
-            currentBudget < 3 ? 'text-red-900' : 'text-zinc-800'
-          }`}
-          style={{ opacity: 0.8 }} 
-        >
-          {currentBudget}
-        </span>
-      </div>
-
-      {/* Header */}
-      <header className="w-full flex justify-between items-center p-4 z-20 shrink-0">
-        <button 
-          onClick={startOver}
-          className="bg-zinc-900/80 backdrop-blur-sm p-3 rounded-2xl border border-zinc-700 text-left hover:bg-zinc-800 hover:border-zinc-500 transition-all group active:scale-95"
-          title="Click to restart game"
-        >
-          <h1 className="text-xl font-bold text-white group-hover:text-yellow-400 transition-colors">HexPath</h1>
-          <p className="text-sm text-zinc-400 group-hover:text-zinc-300">{currentLevel.description}</p>
-        </button>
+      {/* Main Game Section */}
+      <div className="flex-1 flex flex-col relative border-r border-zinc-800">
         
-        <div className="flex gap-2">
-           <button 
-            onClick={() => setShowHeatmap(!showHeatmap)}
-            className={`p-3 rounded-xl shadow-sm transition-all border border-zinc-700 ${
-              showHeatmap ? 'bg-orange-900/50 text-orange-400 ring-1 ring-orange-500' : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-800'
-            }`}
-            title="Toggle Heatmap"
-          >
-            <Flame size={24} />
-          </button>
+        {/* Background Budget Number */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0" aria-hidden="true">
+          <span className={`text-[40vh] font-bold leading-none transition-colors duration-500 ${currentBudget < 3 ? 'text-red-900' : 'text-zinc-800'}`} style={{ opacity: 0.8 }}>
+            {currentBudget}
+          </span>
         </div>
-      </header>
 
-      {/* Main Game Area with Borders */}
-      <main className="flex-1 w-full flex justify-center items-center z-10 relative p-[10%] md:p-[5%] lg:p-[10%] box-border">
-        
-        {isGenerating ? (
-           <div className="flex flex-col items-center gap-4 text-zinc-500 animate-pulse">
-             <Wand2 className="w-16 h-16 text-purple-500" />
-             <p className="text-2xl font-bold text-white">Making magic map...</p>
-           </div>
-        ) : (
-          <div className="w-full h-full"> 
+        {/* Header */}
+        <header className="w-full flex justify-between items-center p-4 z-20 shrink-0">
+          <button onClick={startOver} className="bg-zinc-900/80 backdrop-blur-sm p-3 rounded-2xl border border-zinc-700 text-left hover:bg-zinc-800 transition-all group active:scale-95 shadow-xl">
+            <h1 className="text-xl font-bold text-white group-hover:text-yellow-400 transition-colors">HexPath Explorer</h1>
+            <p className="text-sm text-zinc-400 group-hover:text-zinc-300">{currentLevel.description}</p>
+          </button>
+          
+          <div className="flex flex-col items-end gap-1">
+            <div className="bg-zinc-900/90 border border-zinc-700 rounded-xl px-4 py-2 flex items-center gap-2 shadow-lg">
+              <Star className="text-yellow-400" size={20} fill="currentColor" />
+              <span className="text-2xl font-bold">{totalScore}</span>
+              <span className="text-zinc-500 text-sm uppercase tracking-widest font-bold">Total Stars</span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => toggleViewMode('heat')} className={`p-2 rounded-lg border border-zinc-700 transition-all ${viewMode === 'heat' ? 'bg-orange-500 text-white shadow-[0_0_15px_rgba(249,115,22,0.5)]' : 'bg-zinc-900 text-zinc-400'}`} title="Heatmap"><Flame size={20} /></button>
+              <button onClick={() => toggleViewMode('topo')} className={`p-2 rounded-lg border border-zinc-700 transition-all ${viewMode === 'topo' ? 'bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.5)]' : 'bg-zinc-900 text-zinc-400'}`} title="Topography"><Mountain size={20} /></button>
+            </div>
+          </div>
+        </header>
+
+        {/* Game Map Area */}
+        <main className="flex-1 w-full flex justify-center items-center z-10 relative p-8">
+          {isGenerating ? (
+            <div className="flex flex-col items-center gap-4 text-zinc-500 animate-pulse">
+              <Wand2 className="w-16 h-16 text-purple-500" />
+              <p className="text-2xl font-bold text-white">Summoning a new map...</p>
+            </div>
+          ) : (
             <HexGrid 
               levelData={currentLevel}
               currentPath={path}
               onCellClick={handleCellClick}
-              showHeatmap={showHeatmap}
+              viewMode={viewMode}
               gameStatus={status}
             />
-          </div>
-        )}
+          )}
 
-        {/* Error Feedback Toast */}
-        {errorMsg && (
-          <div className="absolute top-10 bg-red-900/90 border-l-4 border-red-500 text-white p-4 rounded shadow-lg animate-bounce z-50">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={20} />
-              <p className="font-bold">{errorMsg}</p>
+          {errorMsg && (
+            <div className="absolute top-10 bg-red-900/90 border-l-4 border-red-500 text-white p-4 rounded shadow-2xl animate-bounce z-50 flex items-center gap-2">
+              <AlertCircle size={20} /><p className="font-bold">{errorMsg}</p>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Game Over / Win Overlays */}
-        {status === GameStatus.WON && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-40">
-            <div className="bg-zinc-900 p-8 rounded-3xl shadow-2xl border border-zinc-700 flex flex-col items-center text-center animate-in zoom-in duration-300">
-              <Trophy size={64} className="text-yellow-400 mb-4 drop-shadow-md" />
-              <h2 className="text-4xl font-bold text-white mb-2">You Did It!</h2>
-              <p className="text-zinc-400 mb-6 text-xl">Budget left: {currentBudget}</p>
-              <button 
-                onClick={nextLevel}
-                className="bg-green-600 hover:bg-green-500 text-white text-xl font-bold py-4 px-8 rounded-2xl shadow-lg transform transition active:scale-95 flex items-center gap-2"
-              >
-                Next Map <Play fill="currentColor" />
-              </button>
+          {status === GameStatus.WON && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-40">
+              <div className="bg-zinc-900 p-10 rounded-[3rem] shadow-[0_0_50px_rgba(0,0,0,0.5)] border border-zinc-700 flex flex-col items-center text-center animate-in zoom-in duration-300">
+                <div className="relative">
+                  <Trophy size={80} className="text-yellow-400 mb-4 animate-bounce" />
+                  <div className="absolute -top-2 -right-2 bg-blue-500 rounded-full w-10 h-10 flex items-center justify-center font-bold">+{currentBudget}</div>
+                </div>
+                <h2 className="text-5xl font-bold text-white mb-2">Great Job!</h2>
+                <p className="text-zinc-400 mb-8 text-xl">You reached the star with {currentBudget} stars to spare!</p>
+                <button onClick={nextLevel} className="bg-green-500 hover:bg-green-400 text-white text-2xl font-bold py-5 px-10 rounded-3xl shadow-xl transform transition active:scale-95 flex items-center gap-3">
+                  Next Adventure <Play fill="currentColor" size={28} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {status === GameStatus.LOST && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-40">
-            <div className="bg-zinc-900 p-8 rounded-3xl shadow-2xl border border-zinc-700 flex flex-col items-center text-center animate-in zoom-in duration-300">
-              <div className="text-6xl mb-4">😢</div>
-              <h2 className="text-3xl font-bold text-white mb-2">Out of Budget!</h2>
-              <p className="text-zinc-400 mb-6">Try a different path.</p>
-              <button 
-                onClick={resetLevel}
-                className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold py-4 px-8 rounded-2xl shadow-lg transform transition active:scale-95 flex items-center gap-2"
-              >
-                Try Again <RotateCcw />
-              </button>
+          {status === GameStatus.LOST && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-md z-40">
+              <div className="bg-zinc-900 p-10 rounded-[3rem] border border-zinc-700 flex flex-col items-center text-center animate-in zoom-in duration-300">
+                <div className="text-8xl mb-4">😿</div>
+                <h2 className="text-4xl font-bold text-white mb-2">No More Energy!</h2>
+                <p className="text-zinc-400 mb-8 text-xl">The climb was too steep. Try a different way!</p>
+                <button onClick={resetLevel} className="bg-blue-600 hover:bg-blue-500 text-white text-2xl font-bold py-5 px-10 rounded-3xl shadow-xl transform transition active:scale-95 flex items-center gap-3">
+                  Restart Map <RotateCcw size={28} />
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </main>
 
-      </main>
-
-      {/* Footer Controls */}
-      <footer className="w-full p-4 flex justify-center flex-wrap gap-4 z-20 shrink-0">
-        
-        <button 
-          onClick={resetLevel}
-          disabled={status !== GameStatus.PLAYING}
-          className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-6 rounded-xl shadow-lg border border-zinc-700 flex items-center gap-2 disabled:opacity-50 transition-colors"
-        >
-          <RotateCcw size={20} /> Reset
-        </button>
-        
-        {process.env.API_KEY && (
-          <button 
-            onClick={generateAILevel}
-            disabled={isGenerating}
-            className="bg-purple-900/50 hover:bg-purple-800/50 text-purple-200 font-bold py-3 px-6 rounded-xl shadow-lg border border-purple-800 flex items-center gap-2 disabled:opacity-50 transition-colors"
-          >
-            <Wand2 size={20} /> New AI Map
+        <footer className="w-full p-6 flex justify-center gap-4 z-20">
+          <button onClick={resetLevel} disabled={status !== GameStatus.PLAYING} className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-8 rounded-2xl border border-zinc-700 flex items-center gap-2 disabled:opacity-30 transition-all active:scale-95">
+            <RotateCcw size={20} /> Reset Path
           </button>
-        )}
-      </footer>
+          {process.env.API_KEY && (
+            <button onClick={generateAILevel} disabled={isGenerating} className="bg-purple-900/30 hover:bg-purple-800/50 text-purple-300 font-bold py-3 px-8 rounded-2xl border border-purple-800 flex items-center gap-2 disabled:opacity-30 transition-all active:scale-95">
+              <Wand2 size={20} /> Surprise Me!
+            </button>
+          )}
+        </footer>
+      </div>
+
+      {/* Game Log Sidebar */}
+      <aside className="w-80 bg-zinc-950 flex flex-col shrink-0 border-l border-zinc-800 z-30">
+        <div className="p-6 border-b border-zinc-800 flex items-center gap-2 bg-zinc-900/50">
+          <History className="text-zinc-400" size={24} />
+          <h2 className="text-xl font-bold tracking-tight uppercase text-zinc-300">Adventure Log</h2>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          {gameLog.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-center px-4">
+              <ScrollText size={48} className="mb-4 opacity-20" />
+              <p>Your journey is just beginning. Win a map to see your history!</p>
+            </div>
+          ) : (
+            gameLog.map((log, idx) => (
+              <div key={idx} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex flex-col gap-1 hover:border-zinc-700 transition-colors">
+                <div className="flex justify-between items-start">
+                  <span className="font-bold text-zinc-200 line-clamp-1">{log.levelName}</span>
+                  <span className="text-xs text-zinc-500">{new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-yellow-500 font-bold">
+                  <Star size={14} fill="currentColor" />
+                  <span>{log.remainingBudget} Stars collected</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="p-6 bg-zinc-950 border-t border-zinc-800 text-center">
+          <div className="text-xs text-zinc-600 font-bold uppercase tracking-widest mb-1">Lifetime Score</div>
+          <div className="text-3xl font-black text-white">{totalScore}</div>
+        </div>
+      </aside>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+      `}</style>
     </div>
   );
 };

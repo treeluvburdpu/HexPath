@@ -1,28 +1,25 @@
-import { GRID_ROWS, GRID_COLS, START_POS, END_POS } from '../constants';
+import { Coordinate } from '../types';
 import { getHexNeighbors, isSameCoord } from './hexUtils';
 
-export const findMinPathCost = (grid: number[][]): number => {
-    // Dijkstra's Algorithm
-    const dist: number[][] = Array(GRID_ROWS).fill(0).map(() => Array(GRID_COLS).fill(Infinity));
-    dist[START_POS.row][START_POS.col] = 0;
+export const findMinPathCost = (grid: number[][], start: Coordinate, end: Coordinate): number => {
+    const rows = grid.length;
+    // Initialize distances for a jagged grid
+    const dist: number[][] = grid.map(row => Array(row.length).fill(Infinity));
     
-    // Priority Queue (simple array for small grid)
-    const pq = [{ coord: START_POS, cost: 0 }];
+    if (start.row >= rows || start.col >= grid[start.row].length) return -1;
+    dist[start.row][start.col] = 0;
+    
+    const pq = [{ coord: start, cost: 0 }];
     
     while (pq.length > 0) {
-        // Sort to simulate priority queue
         pq.sort((a, b) => a.cost - b.cost);
         const { coord, cost } = pq.shift()!;
         
-        // If we found a cheaper way already, skip
         if (cost > dist[coord.row][coord.col]) continue;
-        
-        // Reached end?
-        if (isSameCoord(coord, END_POS)) return cost;
+        if (isSameCoord(coord, end)) return cost;
 
-        const neighbors = getHexNeighbors(coord);
+        const neighbors = getHexNeighbors(coord, grid);
         for (const n of neighbors) {
-            // Cost to enter neighbor
             const moveCost = grid[n.row][n.col];
             const newCost = cost + moveCost;
             
@@ -33,5 +30,5 @@ export const findMinPathCost = (grid: number[][]): number => {
         }
     }
     
-    return -1; // Path not found
+    return -1; 
 };
