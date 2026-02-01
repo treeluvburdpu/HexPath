@@ -22,11 +22,14 @@ export interface GameLogEntry {
   levelName: string;
   remainingBudget: number;
   timestamp: number;
+  path: Coordinate[]; // The steps taken
+  levelData: LevelData; // Snapshot of the level at that time
 }
 
 export enum GameStatus {
   PLAYING,
   WON,
   LOST,
-  LOADING
+  LOADING,
+  HISTORY // New status for viewing past games
 }

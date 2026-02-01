@@ -15,10 +15,26 @@ export const INITIAL_LEVELS: LevelData[] = [
       [2, 2, 2, 4, 2],
       [1, 5, 1, 1, 2],
       [0, 1, 2, 3, 3] 
-    ]
+    ],
+    start: { row: 4, col: 0 },
+    end: { row: 0, col: 4 }
   },
   {
     id: 2,
+    description: "The Walkabout",
+    budget: 10,
+    grid: [
+      [3, 2, 3, 2, 0,1,2,3], 
+      [2, 1, 4, 1, 1,2,1,1],
+      [2, 2, 2, 4, 2,3],
+      [1, 5, 1, 1, 2,0,1,0],
+      [0, 1, 2, 3, 3,1,1,1] 
+    ],
+    start: { row: 4, col: 0 },
+    end: { row: 0, col: 4 }
+  },
+  {
+    id: 3,
     description: "Jagged Valley",
     budget: 15,
     grid: [
@@ -32,7 +48,7 @@ export const INITIAL_LEVELS: LevelData[] = [
     end: { row: 0, col: 4 }
   },
   {
-    id: 3,
+    id: 4,
     description: "The Deep Woods",
     budget: 20,
     grid: [
@@ -41,6 +57,8 @@ export const INITIAL_LEVELS: LevelData[] = [
       [3, 1, 6, 4, 1, 3],
       [2, 2, 2, 1, 2, 2],
       [0, 5, 1, 2, 3, 4]
-    ]
+    ],
+    start: { row: 4, col: 0 },
+    end: { row: 0, col: 4 }
   }
 ];
