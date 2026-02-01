@@ -5,14 +5,14 @@ import { INITIAL_LEVELS, DEFAULT_START, DEFAULT_END } from './constants';
 import { isSameCoord } from './utils/hexUtils';
 import { findMinPathCost } from './utils/pathfinding';
 import { generateLevel } from './services/geminiService';
-import { RotateCcw, Flame, Trophy, AlertCircle, Play, Wand2, Mountain, ScrollText, History, Star, Eye, Undo2, ArrowRight, Zap } from 'lucide-react';
+import { RotateCcw, Flame, Trophy, AlertCircle, Play, Wand2, Mountain, ScrollText, History, Star, Eye, Undo2, ArrowRight, Zap, X } from 'lucide-react';
 
 const BUFFER_COST = 2; 
 const STORAGE_KEY_SCORE = 'hexpath_total_score';
 const STORAGE_KEY_LOG = 'hexpath_game_log';
-const STORAGE_KEY_ACTIVE_SESSION = 'hexpath_active_session';
+const STORAGE_KEY_PERSISTED_SESSION = 'hexpath_persisted_session';
 
-interface ActiveSession {
+interface SessionState {
   level: LevelData;
   path: Coordinate[];
   budget: number;
@@ -21,19 +21,18 @@ interface ActiveSession {
 }
 
 const App: React.FC = () => {
-  // --- EAGER INITIALIZATION ---
-  // We read from localStorage inside the initializers to prevent "0-state" race conditions.
+  // --- 1. State Initialization ---
   
-  const [activeSession, setActiveSession] = useState<ActiveSession>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_SESSION);
+  // We keep a "Buffer" of the current real game. 
+  // This is what we return to when exiting History mode.
+  const [activeBuffer, setActiveBuffer] = useState<SessionState>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_PERSISTED_SESSION);
     if (saved) return JSON.parse(saved);
     
-    // Default to Level 1
+    // Default Fallback: Level 1
     const lvl = INITIAL_LEVELS[0];
     const sPos = lvl.start || DEFAULT_START(lvl.grid.length);
-    const minCost = findMinPathCost(lvl.grid, sPos, lvl.end || DEFAULT_END(lvl.grid[0].length));
-    const budget = lvl.budget || (minCost === -1 ? 20 : minCost + BUFFER_COST);
-    
+    const budget = lvl.budget || 10;
     return {
       level: lvl,
       path: [sPos],
@@ -43,11 +42,13 @@ const App: React.FC = () => {
     };
   });
 
-  const [currentLevel, setCurrentLevel] = useState<LevelData>(activeSession.level);
-  const [path, setPath] = useState<Coordinate[]>(activeSession.path);
-  const [currentBudget, setCurrentBudget] = useState(activeSession.budget);
-  const [initialBudget, setInitialBudget] = useState(activeSession.initialBudget);
-  const [currentLevelIndex, setCurrentLevelIndex] = useState(activeSession.index);
+  // These are the "Current Display" states. 
+  // They change when playing OR when viewing history.
+  const [currentLevel, setCurrentLevel] = useState<LevelData>(activeBuffer.level);
+  const [path, setPath] = useState<Coordinate[]>(activeBuffer.path);
+  const [currentBudget, setCurrentBudget] = useState(activeBuffer.budget);
+  const [initialBudget, setInitialBudget] = useState(activeBuffer.initialBudget);
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(activeBuffer.index);
   
   const [status, setStatus] = useState<GameStatus>(GameStatus.PLAYING);
   const [viewMode, setViewMode] = useState<'none' | 'heat' | 'topo'>('none');
@@ -67,34 +68,40 @@ const App: React.FC = () => {
   const startPos = useMemo(() => currentLevel.start || DEFAULT_START(currentLevel.grid.length), [currentLevel]);
   const endPos = useMemo(() => currentLevel.end || DEFAULT_END(Math.max(...currentLevel.grid.map(r => r.length))), [currentLevel]);
 
-  // Sync basic scores/logs
+  // --- 2. Side Effects ---
+
+  // Sync basic stats
   useEffect(() => localStorage.setItem(STORAGE_KEY_SCORE, totalScore.toString()), [totalScore]);
   useEffect(() => localStorage.setItem(STORAGE_KEY_LOG, JSON.stringify(gameLog)), [gameLog]);
 
-  // Sync Active Session whenever it changes (only when in PLAYING or WON/LOST states)
+  // CRITICAL: Keep Buffer in sync when actually playing
   useEffect(() => {
-    if (status !== GameStatus.HISTORY && status !== GameStatus.LOADING) {
-      const session: ActiveSession = {
+    if (status === GameStatus.PLAYING || status === GameStatus.WON || status === GameStatus.LOST) {
+      const state = {
         level: currentLevel,
         path,
         budget: currentBudget,
         initialBudget,
         index: currentLevelIndex
       };
-      localStorage.setItem(STORAGE_KEY_ACTIVE_SESSION, JSON.stringify(session));
+      setActiveBuffer(state);
+      localStorage.setItem(STORAGE_KEY_PERSISTED_SESSION, JSON.stringify(state));
     }
   }, [currentLevel, path, currentBudget, initialBudget, currentLevelIndex, status]);
+
+  // --- 3. Core Logic ---
 
   const initNewLevel = useCallback((level: LevelData, index: number) => {
     const sPos = level.start || DEFAULT_START(level.grid.length);
     const ePos = level.end || DEFAULT_END(Math.max(...level.grid.map(r => r.length)));
     
-    // Use defined budget if possible
+    // Explicit Budget Calculation
     let budget = level.budget;
     if (!budget || budget <= 0) {
       const minCost = findMinPathCost(level.grid, sPos, ePos);
       budget = minCost === -1 ? 20 : minCost + BUFFER_COST;
     }
+    if (budget < 5) budget = 10; // Safety floor
     
     setCurrentLevel(level);
     setCurrentLevelIndex(index);
@@ -107,7 +114,7 @@ const App: React.FC = () => {
 
   const handleCellClick = (coord: Coordinate, cost: number) => {
     if (status === GameStatus.HISTORY) {
-       setErrorMsg("Memory Mode! Click 'Resume' to play.");
+       setErrorMsg("Memory Mode! Click 'Resume' to move.");
        setTimeout(() => setErrorMsg(null), 2000);
        return;
     }
@@ -178,18 +185,13 @@ const App: React.FC = () => {
   };
 
   const resumeActiveAdventure = () => {
-    const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_SESSION);
-    if (saved) {
-      const session: ActiveSession = JSON.parse(saved);
-      setCurrentLevel(session.level);
-      setPath(session.path);
-      setCurrentBudget(session.budget);
-      setInitialBudget(session.initialBudget);
-      setCurrentLevelIndex(session.index);
-      setStatus(GameStatus.PLAYING);
-    } else {
-      initNewLevel(INITIAL_LEVELS[0], 0);
-    }
+    setCurrentLevel(activeBuffer.level);
+    setPath(activeBuffer.path);
+    setCurrentBudget(activeBuffer.budget);
+    setInitialBudget(activeBuffer.initialBudget);
+    setCurrentLevelIndex(activeBuffer.index);
+    setStatus(GameStatus.PLAYING);
+    setErrorMsg(null);
   };
 
   const startOver = () => {
@@ -198,7 +200,7 @@ const App: React.FC = () => {
       setGameLog([]);
       localStorage.removeItem(STORAGE_KEY_SCORE);
       localStorage.removeItem(STORAGE_KEY_LOG);
-      localStorage.removeItem(STORAGE_KEY_ACTIVE_SESSION);
+      localStorage.removeItem(STORAGE_KEY_PERSISTED_SESSION);
       initNewLevel(INITIAL_LEVELS[0], 0);
     }
   };
@@ -225,11 +227,10 @@ const App: React.FC = () => {
     setCurrentLevel(log.levelData);
     setPath(log.path);
     setCurrentBudget(log.remainingBudget);
-    // Note: initialBudget for a history item is effectively its starting budget, 
-    // but in history mode we just show the final path.
+    setInitialBudget(log.levelData.budget); // Approximate
   };
 
-  const isCurrentGameStarted = path.length > 1;
+  const isCurrentGameStarted = activeBuffer.path.length > 1;
 
   return (
     <div className="h-screen w-screen bg-black flex overflow-hidden font-sans text-white">
@@ -266,8 +267,16 @@ const App: React.FC = () => {
 
         {/* History Mode Banner */}
         {status === GameStatus.HISTORY && (
-          <div className="z-30 bg-blue-600 text-white py-2 px-4 text-center font-bold flex items-center justify-center gap-2 shadow-lg">
-            <Eye size={20} /> <span className="uppercase tracking-widest">You are viewing a memory</span>
+          <div className="z-30 bg-blue-600 text-white py-2 px-6 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
+              <Eye size={20} /> <span className="uppercase font-black tracking-widest text-sm">Viewing Memory</span>
+            </div>
+            <button 
+              onClick={resumeActiveAdventure}
+              className="bg-white/20 hover:bg-white/30 px-4 py-1 rounded-full text-xs font-bold uppercase flex items-center gap-2 transition-all"
+            >
+              Close Memory <X size={14} />
+            </button>
           </div>
         )}
 
@@ -302,7 +311,7 @@ const App: React.FC = () => {
                   <div className="absolute -top-2 -right-2 bg-blue-500 rounded-full w-10 h-10 flex items-center justify-center font-bold">+{currentBudget}</div>
                 </div>
                 <h2 className="text-5xl font-bold text-white mb-2">Great Job!</h2>
-                <p className="text-zinc-400 mb-8 text-xl">You reached the star with {currentBudget} stars to spare!</p>
+                <p className="text-zinc-400 mb-8 text-xl">You reached the star with {currentBudget} stars left!</p>
                 <button onClick={nextLevel} className="bg-green-500 hover:bg-green-400 text-white text-2xl font-bold py-5 px-10 rounded-3xl shadow-xl transform transition active:scale-95 flex items-center gap-3">
                   Next Adventure <Play fill="currentColor" size={28} />
                 </button>
@@ -315,7 +324,7 @@ const App: React.FC = () => {
               <div className="bg-zinc-900 p-10 rounded-[3rem] border border-zinc-700 flex flex-col items-center text-center animate-in zoom-in duration-300">
                 <div className="text-8xl mb-4">😿</div>
                 <h2 className="text-4xl font-bold text-white mb-2">No More Stars!</h2>
-                <p className="text-zinc-400 mb-8 text-xl">The path was too difficult. Try a different way!</p>
+                <p className="text-zinc-400 mb-8 text-xl">The path was too difficult. Try again!</p>
                 <button onClick={resetLevel} className="bg-blue-600 hover:bg-blue-500 text-white text-2xl font-bold py-5 px-10 rounded-3xl shadow-xl transform transition active:scale-95 flex items-center gap-3">
                   Restart Map <RotateCcw size={28} />
                 </button>
@@ -331,8 +340,8 @@ const App: React.FC = () => {
                 onClick={resumeActiveAdventure} 
                 className="bg-green-600 hover:bg-green-500 text-white font-black py-4 px-10 rounded-2xl shadow-lg flex items-center gap-3 transition-all active:scale-95 uppercase tracking-wide group"
               >
-                <Zap size={24} className="fill-current text-yellow-300" />
-                {isCurrentGameStarted ? "Resume My Adventure" : "Start My Adventure"}
+                <Zap size={24} className="fill-current text-yellow-300 group-hover:scale-110 transition-transform" />
+                {isCurrentGameStarted ? "Resume Adventure" : "Go to Current Map"}
               </button>
               <button onClick={resetLevel} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 px-8 rounded-2xl shadow-lg flex items-center gap-3 transition-all active:scale-95">
                 <RotateCcw size={24} /> Replay This Map
@@ -359,11 +368,28 @@ const App: React.FC = () => {
           <History className="text-zinc-400" size={24} />
           <h2 className="text-xl font-bold tracking-tight uppercase text-zinc-300">Adventure Log</h2>
         </div>
+
+        {/* Jump-Back Shortcut (Visible in History Mode) */}
+        {status === GameStatus.HISTORY && (
+          <div className="p-4 border-b border-zinc-800 bg-green-950/20">
+            <button 
+              onClick={resumeActiveAdventure}
+              className="w-full bg-green-900/50 border border-green-700 p-4 rounded-xl flex flex-col gap-1 hover:bg-green-800/50 transition-all group"
+            >
+              <div className="flex items-center gap-2 text-green-400 font-bold text-xs uppercase tracking-widest">
+                <Zap size={14} fill="currentColor" /> Active Adventure
+              </div>
+              <div className="text-white font-bold line-clamp-1">{activeBuffer.level.description}</div>
+              <div className="text-zinc-500 text-[10px] font-bold uppercase">{activeBuffer.path.length <= 1 ? "Not Started Yet" : `Step ${activeBuffer.path.length}`}</div>
+            </button>
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
           {gameLog.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-600 text-center px-4">
               <ScrollText size={48} className="mb-4 opacity-20" />
-              <p>Your journey is just beginning. Win a map to see your history!</p>
+              <p>Win a map to see your history here!</p>
             </div>
           ) : (
             gameLog.map((log, idx) => {
