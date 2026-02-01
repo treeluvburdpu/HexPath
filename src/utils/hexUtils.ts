@@ -1,4 +1,4 @@
-import { Coordinate } from '../types';
+import type { Coordinate } from '../types';
 
 export const isSameCoord = (a: Coordinate, b: Coordinate): boolean => {
   return a.row === b.row && a.col === b.col;

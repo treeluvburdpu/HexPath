@@ -1,4 +1,4 @@
-import { Coordinate } from '../types';
+import type { Coordinate } from '../types';
 import { getHexNeighbors, isSameCoord } from './hexUtils';
 
 export const findMinPathCost = (grid: number[][], start: Coordinate, end: Coordinate): number => {

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import Hexagon from './Hexagon';
-import { LevelData, Coordinate } from '../types';
+import type { LevelData, Coordinate, GameStatus } from '../types';
 import { getHexNeighbors, isSameCoord, hexToPixel } from '../utils/hexUtils';
 import { DEFAULT_START, DEFAULT_END } from '../constants';
 
@@ -9,7 +9,7 @@ interface HexGridProps {
   currentPath: Coordinate[];
   onCellClick: (coord: Coordinate, cost: number) => void;
   viewMode: 'none' | 'heat' | 'topo';
-  gameStatus: any;
+  gameStatus: GameStatus;
 }
 
 const HexGrid: React.FC<HexGridProps> = ({ 
@@ -120,8 +120,7 @@ const HexGrid: React.FC<HexGridProps> = ({
       const isSelected = currentPath.some(p => isSameCoord(p, coord));
       
       const isNeighbor = currentNeighbors.some(n => isSameCoord(n, coord));
-      const isInPath = currentPath.some(p => isSameCoord(p, coord));
-      const isWalkable = (isNeighbor && !isInPath) || (isInPath && !isStart);
+      const isWalkable = (isNeighbor && !isSelected) || (isSelected && !isStart);
 
       cells.push(
         <Hexagon

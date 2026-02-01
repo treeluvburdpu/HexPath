@@ -1,4 +1,4 @@
-import { LevelData } from './types';
+import type { LevelData } from './types';
 
 // Default Fallbacks if not provided in level data
 export const DEFAULT_START = (rows: number) => ({ row: rows - 1, col: 0 });

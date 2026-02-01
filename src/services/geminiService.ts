@@ -1,12 +1,13 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { LevelData } from "../types";
+import type { LevelData } from "../types";
 
 export const generateLevel = async (difficulty: number = 1): Promise<LevelData> => {
-  if (!process.env.API_KEY) {
+  const apiKey = typeof process !== 'undefined' ? process.env.API_KEY : undefined;
+  if (!apiKey) {
     throw new Error("API Key missing");
   }
 
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey });
 
   const systemInstruction = `
     You are a game designer for a 5-year-old's puzzle game. 

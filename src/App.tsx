@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import HexGrid from './components/HexGrid';
-import { LevelData, Coordinate, GameStatus, GameLogEntry } from './types';
+import type { LevelData, Coordinate, GameLogEntry, GameStatus as GameStatusType } from './types';
+import { GameStatus } from './types';
 import { INITIAL_LEVELS, DEFAULT_START, DEFAULT_END } from './constants';
 import { isSameCoord } from './utils/hexUtils';
 import { findMinPathCost } from './utils/pathfinding';
@@ -23,52 +24,57 @@ interface SessionState {
 const App: React.FC = () => {
   // --- 1. State Initialization ---
   
-  // We keep a "Buffer" of the current real game. 
-  // This is what we return to when exiting History mode.
-  const [activeBuffer, setActiveBuffer] = useState<SessionState>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_PERSISTED_SESSION);
-    if (saved) return JSON.parse(saved);
-    
-    // Default Fallback: Level 1
-    const lvl = INITIAL_LEVELS[0];
-    const sPos = lvl.start || DEFAULT_START(lvl.grid.length);
-    const budget = lvl.budget || 10;
-    return {
-      level: lvl,
-      path: [sPos],
-      budget: budget,
-      initialBudget: budget,
-      index: 0
-    };
+  // Default Fallback: Level 1
+  const initialLvl = INITIAL_LEVELS[0];
+  const initialSPos = initialLvl.start || DEFAULT_START(initialLvl.grid.length);
+  const initialBudgetVal = initialLvl.budget || 10;
+
+  const [activeBuffer, setActiveBuffer] = useState<SessionState>({
+    level: initialLvl,
+    path: [initialSPos],
+    budget: initialBudgetVal,
+    initialBudget: initialBudgetVal,
+    index: 0
   });
 
-  // These are the "Current Display" states. 
-  // They change when playing OR when viewing history.
-  const [currentLevel, setCurrentLevel] = useState<LevelData>(activeBuffer.level);
-  const [path, setPath] = useState<Coordinate[]>(activeBuffer.path);
-  const [currentBudget, setCurrentBudget] = useState(activeBuffer.budget);
-  const [initialBudget, setInitialBudget] = useState(activeBuffer.initialBudget);
-  const [currentLevelIndex, setCurrentLevelIndex] = useState(activeBuffer.index);
+  const [currentLevel, setCurrentLevel] = useState<LevelData>(initialLvl);
+  const [path, setPath] = useState<Coordinate[]>([initialSPos]);
+  const [currentBudget, setCurrentBudget] = useState(initialBudgetVal);
+  const [initialBudget, setInitialBudget] = useState(initialBudgetVal);
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   
-  const [status, setStatus] = useState<GameStatus>(GameStatus.PLAYING);
+  const [status, setStatus] = useState<GameStatusType>(GameStatus.PLAYING);
   const [viewMode, setViewMode] = useState<'none' | 'heat' | 'topo'>('none');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const [totalScore, setTotalScore] = useState<number>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_SCORE);
-    return saved ? parseInt(saved, 10) : 0;
-  });
-  
-  const [gameLog, setGameLog] = useState<GameLogEntry[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_LOG);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [totalScore, setTotalScore] = useState<number>(0);
+  const [gameLog, setGameLog] = useState<GameLogEntry[]>([]);
 
   const startPos = useMemo(() => currentLevel.start || DEFAULT_START(currentLevel.grid.length), [currentLevel]);
   const endPos = useMemo(() => currentLevel.end || DEFAULT_END(Math.max(...currentLevel.grid.map(r => r.length))), [currentLevel]);
 
   // --- 2. Side Effects ---
+
+  // Load persisted state on mount
+  useEffect(() => {
+    const savedSession = localStorage.getItem(STORAGE_KEY_PERSISTED_SESSION);
+    if (savedSession) {
+      const state = JSON.parse(savedSession);
+      setActiveBuffer(state);
+      setCurrentLevel(state.level);
+      setPath(state.path);
+      setCurrentBudget(state.budget);
+      setInitialBudget(state.initialBudget);
+      setCurrentLevelIndex(state.index);
+    }
+
+    const savedScore = localStorage.getItem(STORAGE_KEY_SCORE);
+    if (savedScore) setTotalScore(parseInt(savedScore, 10));
+
+    const savedLog = localStorage.getItem(STORAGE_KEY_LOG);
+    if (savedLog) setGameLog(JSON.parse(savedLog));
+  }, []);
 
   // Sync basic stats
   useEffect(() => localStorage.setItem(STORAGE_KEY_SCORE, totalScore.toString()), [totalScore]);
@@ -240,7 +246,9 @@ const App: React.FC = () => {
         
         {/* Background Budget Number */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0" aria-hidden="true">
-          <span className={`text-[40vh] font-bold leading-none transition-colors duration-500 ${currentBudget < 3 ? 'text-red-900' : 'text-zinc-800'}`} style={{ opacity: 0.8 }}>
+          <span 
+            data-testid="budget-display"
+            className={`text-[40vh] font-bold leading-none transition-colors duration-500 ${currentBudget < 3 ? 'text-red-900' : 'text-zinc-800'}`} style={{ opacity: 0.8 }}>
             {currentBudget}
           </span>
         </div>
@@ -255,7 +263,7 @@ const App: React.FC = () => {
           <div className="flex flex-col items-end gap-1">
             <div className="bg-zinc-900/90 border border-zinc-700 rounded-xl px-4 py-2 flex items-center gap-2 shadow-lg">
               <Star className="text-yellow-400" size={20} fill="currentColor" />
-              <span className="text-2xl font-bold">{totalScore}</span>
+              <span data-testid="total-stars" className="text-2xl font-bold">{totalScore}</span>
               <span className="text-zinc-500 text-sm uppercase tracking-widest font-bold">Total Stars</span>
             </div>
             <div className="flex gap-2">
@@ -352,7 +360,7 @@ const App: React.FC = () => {
               <button onClick={resetLevel} className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-3 px-8 rounded-2xl border border-zinc-700 flex items-center gap-2 transition-all active:scale-95">
                 <RotateCcw size={20} /> Reset Path
               </button>
-              {process.env.API_KEY && (
+              {typeof process !== 'undefined' && process.env.API_KEY && (
                 <button onClick={generateAILevel} disabled={isGenerating} className="bg-purple-900/30 hover:bg-purple-800/50 text-purple-300 font-bold py-3 px-8 rounded-2xl border border-purple-800 flex items-center gap-2 disabled:opacity-30 transition-all active:scale-95">
                   <Wand2 size={20} /> Surprise Me!
                 </button>

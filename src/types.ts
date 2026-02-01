@@ -26,10 +26,12 @@ export interface GameLogEntry {
   levelData: LevelData; // Snapshot of the level at that time
 }
 
-export enum GameStatus {
-  PLAYING,
-  WON,
-  LOST,
-  LOADING,
-  HISTORY // New status for viewing past games
-}
+export const GameStatus = {
+  PLAYING: 'PLAYING',
+  WON: 'WON',
+  LOST: 'LOST',
+  LOADING: 'LOADING',
+  HISTORY: 'HISTORY'
+} as const;
+
+export type GameStatus = typeof GameStatus[keyof typeof GameStatus];

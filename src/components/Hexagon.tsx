@@ -1,5 +1,5 @@
 import React from 'react';
-import { HexData } from '../types';
+import type { HexData } from '../types';
 import { hexToPixel } from '../utils/hexUtils';
 
 interface HexagonProps {
@@ -45,7 +45,7 @@ const Hexagon: React.FC<HexagonProps> = ({
     strokeColor = '#4ADE80';
     strokeWidth = 3;
   } else if (isSelected) {
-    fillColor = 'rgba(96, 165, 250, 0.3)'; // Blue-400 very transparent
+    fillColor = 'rgba(96, 165, 250, 0.8)'; // Increased opacity from 0.3 to 0.8
     strokeColor = '#60A5FA';
     textColor = '#ffffff';
   }
@@ -58,9 +58,16 @@ const Hexagon: React.FC<HexagonProps> = ({
 
   return (
     <g 
-      onClick={isWalkable ? onClick : undefined} 
+      onClick={() => {
+        if (isWalkable) onClick();
+      }}
       style={{ cursor: isWalkable ? 'pointer' : 'default', transition: 'all 0.3s ease' }}
       className={isWalkable ? "hover:opacity-90 active:scale-95" : ""}
+      data-testid="hexagon"
+      data-walkable={isWalkable}
+      data-row={row}
+      data-col={col}
+      data-is-selected={isSelected}
     >
       <polygon
         points={points}
@@ -70,6 +77,18 @@ const Hexagon: React.FC<HexagonProps> = ({
         strokeLinejoin="round"
         className="transition-colors duration-300"
       />
+      {/* Path Indicator Circle */}
+      {isSelected && !isStart && !isEnd && (
+        <circle
+          cx={x}
+          cy={y}
+          r={size * 0.4}
+          fill="rgba(96, 165, 250, 0.4)"
+          stroke="#60A5FA"
+          strokeWidth="2"
+          className="animate-pulse pointer-events-none"
+        />
+      )}
       {/* Cost Number */}
       <text
         x={x}
