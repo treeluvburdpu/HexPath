@@ -55,13 +55,14 @@ export const generateLevel = async (difficulty: number = 1): Promise<LevelData> 
               col: { type: Type.INTEGER }
             }
           },
+          gradient: { type: Type.STRING },
           budget: { type: Type.INTEGER },
           description: { type: Type.STRING }
         },
         required: ["grid", "budget", "start", "end"]
       }
     },
-    contents: `Generate a level with difficulty ${difficulty} (1-5 scale).`,
+    contents: `Generate a level with difficulty ${difficulty} (1-5 scale). Include a 'gradient' string representation of the grid (compact digits 0-9).`,
   });
 
   if (!response.text) {
@@ -74,12 +75,24 @@ export const generateLevel = async (difficulty: number = 1): Promise<LevelData> 
   if (data.grid[data.start.row]) data.grid[data.start.row][data.start.col] = 0;
   if (data.grid[data.end.row]) data.grid[data.end.row][data.end.col] = 0;
 
-  return {
-    id: `ai-${Date.now()}`,
-    grid: data.grid,
-    budget: data.budget,
-    start: data.start,
-    end: data.end,
-    description: data.description || "AI Mystery Map"
+    return {
+
+      id: `ai-${Date.now()}`,
+
+      grid: data.grid,
+
+      gradient: data.gradient,
+
+      budget: data.budget,
+
+      start: data.start,
+
+      end: data.end,
+
+      description: data.description || "AI Mystery Map"
+
+    };
+
   };
-};
+
+  

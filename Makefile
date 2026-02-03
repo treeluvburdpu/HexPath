@@ -20,8 +20,8 @@ build: ## Build the application
 preview: ## Preview the production build
 	npm run preview
 
-test: ## Run unit tests
-	npm run test
+test: ## Run unit tests (non-interactive)
+	npm run test -- --run
 
 test-ui: ## Run unit tests with UI
 	npm run test:ui

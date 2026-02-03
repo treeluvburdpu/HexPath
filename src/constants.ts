@@ -9,13 +9,13 @@ export const INITIAL_LEVELS: LevelData[] = [
     id: 1,
     description: "The Beginning",
     budget: 10,
-    grid: [
-      [3, 2, 3, 2, 0], 
-      [2, 1, 4, 1, 1],
-      [2, 2, 2, 4, 2],
-      [1, 5, 1, 1, 2],
-      [0, 1, 2, 3, 3] 
-    ],
+    gradient: `
+      32320
+      21411
+      22242
+      15112
+      01233
+    `,
     start: { row: 4, col: 0 },
     end: { row: 0, col: 4 }
   },
@@ -23,13 +23,13 @@ export const INITIAL_LEVELS: LevelData[] = [
     id: 2,
     description: "The Walkabout",
     budget: 10,
-    grid: [
-      [3, 2, 3, 2, 0,1,2,3], 
-      [2, 1, 4, 1, 1,2,1,1],
-      [2, 2, 2, 4, 2,3],
-      [1, 5, 1, 1, 2,0,1,0],
-      [0, 1, 2, 3, 3,1,1,1] 
-    ],
+    gradient: `
+      32320123
+      21411211
+      222423
+      15112010
+      01233111
+    `,
     start: { row: 4, col: 0 },
     end: { row: 0, col: 4 }
   },
@@ -37,13 +37,13 @@ export const INITIAL_LEVELS: LevelData[] = [
     id: 3,
     description: "Jagged Valley",
     budget: 15,
-    grid: [
-      [4, 4, 3, 2, 0],
-      [3, 5, 2], // Jagged row
-      [2, 2, 1, 5, 3],
-      [3, 1, 6, 1],      // Jagged row
-      [0, 2, 1, 2, 4]
-    ],
+    gradient: `
+      44320
+      352
+      22153
+      3161
+      02124
+    `,
     start: { row: 4, col: 0 },
     end: { row: 0, col: 4 }
   },
@@ -51,13 +51,13 @@ export const INITIAL_LEVELS: LevelData[] = [
     id: 4,
     description: "The Deep Woods",
     budget: 20,
-    grid: [
-      [5, 1, 1, 1, 0, 2],
-      [4, 2, 5, 2, 2, 1],
-      [3, 1, 6, 4, 1, 3],
-      [2, 2, 2, 1, 2, 2],
-      [0, 5, 1, 2, 3, 4]
-    ],
+    gradient: `
+      511102
+      425221
+      316413
+      222122
+      051234
+    `,
     start: { row: 4, col: 0 },
     end: { row: 0, col: 4 }
   }

@@ -27,8 +27,7 @@ describe('App Pathfinding', () => {
     // The budget is displayed in a large span in the background.
     // It starts at 10. The first walkable hex in Level 1 has cost 1.
     await vi.waitFor(() => {
-      const budgetDisplay = screen.getByText(/^[0-9]+$/);
-      console.log('Current Budget in test:', budgetDisplay.textContent);
+      const budgetDisplay = screen.getByTestId('budget-display');
       expect(budgetDisplay.textContent).toBe('9');
     }, { timeout: 2000 });
   });

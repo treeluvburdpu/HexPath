@@ -22,8 +22,9 @@ const HexGrid: React.FC<HexGridProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [hexSize, setHexSize] = useState(40);
 
-  const startPos = levelData.start || DEFAULT_START(levelData.grid.length);
-  const maxColsAcrossGrid = Math.max(...levelData.grid.map(r => r.length), 1);
+  const grid = levelData.grid || [];
+  const startPos = levelData.start || DEFAULT_START(grid.length);
+  const maxColsAcrossGrid = Math.max(...grid.map(r => r.length), 1);
   const endPos = levelData.end || DEFAULT_END(maxColsAcrossGrid);
 
   // Responsive sizing
@@ -31,8 +32,8 @@ const HexGrid: React.FC<HexGridProps> = ({
     const handleResize = () => {
       if (containerRef.current) {
         const { width, height } = containerRef.current.getBoundingClientRect();
-        const maxCols = Math.max(...levelData.grid.map(r => r.length), 1);
-        const rows = levelData.grid.length || 1;
+        const maxCols = Math.max(...grid.map(r => r.length), 1);
+        const rows = grid.length || 1;
         
         const estWidth = width / (maxCols * 1.8);
         const estHeight = height / (rows * 1.6);
@@ -50,7 +51,7 @@ const HexGrid: React.FC<HexGridProps> = ({
     const heatPoints = [];
     const MAX_VISUAL_COST = 6; 
 
-    levelData.grid.forEach((row, r) => {
+        grid.forEach((row, r) => {
       row.forEach((cost, c) => {
         if (cost === 0) return;
         const { x, y } = hexToPixel(r, c, hexSize);
@@ -74,7 +75,7 @@ const HexGrid: React.FC<HexGridProps> = ({
       const shapePoints: React.ReactElement[] = [];
       const color = elevationColors[Math.min(threshold - 1, elevationColors.length - 1)];
 
-      levelData.grid.forEach((row, r) => {
+          grid.forEach((row, r) => {
         row.forEach((cost, c) => {
           if (cost >= threshold && cost > 0) {
             const { x, y } = hexToPixel(r, c, hexSize);
@@ -110,9 +111,9 @@ const HexGrid: React.FC<HexGridProps> = ({
 
   const cells = [];
   const lastPathCell = currentPath.length > 0 ? currentPath[currentPath.length - 1] : undefined;
-  const currentNeighbors = lastPathCell ? getHexNeighbors(lastPathCell, levelData.grid) : [];
+  const currentNeighbors = lastPathCell ? getHexNeighbors(lastPathCell, grid) : [];
 
-  levelData.grid.forEach((row, r) => {
+      grid.forEach((row, r) => {
     row.forEach((cost, c) => {
       const coord = { row: r, col: c };
       const isStart = isSameCoord(coord, startPos);
@@ -137,9 +138,9 @@ const HexGrid: React.FC<HexGridProps> = ({
     });
   });
 
-  const maxCols = Math.max(...levelData.grid.map(r => r.length), 1);
+  const maxCols = Math.max(...grid.map(r => r.length), 1);
   const svgWidth = (maxCols + 0.5) * Math.sqrt(3) * hexSize + hexSize;
-  const svgHeight = (levelData.grid.length * 1.5 + 0.5) * hexSize + hexSize;
+  const svgHeight = (grid.length * 1.5 + 0.5) * hexSize + hexSize;
 
   return (
     <div ref={containerRef} className="w-full h-full flex justify-center items-center z-10 relative">

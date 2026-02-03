@@ -5,6 +5,7 @@ import { GameStatus } from './types';
 import { INITIAL_LEVELS, DEFAULT_START, DEFAULT_END } from './constants';
 import { isSameCoord } from './utils/hexUtils';
 import { findMinPathCost } from './utils/pathfinding';
+import { normalizeLevel } from './utils/mapParser';
 import { generateLevel } from './services/geminiService';
 import { RotateCcw, Flame, Trophy, AlertCircle, Play, Wand2, Mountain, ScrollText, History, Star, Eye, Undo2, ArrowRight, Zap, X } from 'lucide-react';
 
@@ -25,8 +26,8 @@ const App: React.FC = () => {
   // --- 1. State Initialization ---
   
   // Default Fallback: Level 1
-  const initialLvl = INITIAL_LEVELS[0];
-  const initialSPos = initialLvl.start || DEFAULT_START(initialLvl.grid.length);
+  const initialLvl = normalizeLevel(INITIAL_LEVELS[0]);
+  const initialSPos = initialLvl.start || DEFAULT_START(initialLvl.grid?.length || 5);
   const initialBudgetVal = initialLvl.budget || 10;
 
   const [activeBuffer, setActiveBuffer] = useState<SessionState>({
@@ -61,8 +62,9 @@ const App: React.FC = () => {
     const savedSession = localStorage.getItem(STORAGE_KEY_PERSISTED_SESSION);
     if (savedSession) {
       const state = JSON.parse(savedSession);
-      setActiveBuffer(state);
-      setCurrentLevel(state.level);
+      const normalizedLvl = normalizeLevel(state.level);
+      setActiveBuffer({ ...state, level: normalizedLvl });
+      setCurrentLevel(normalizedLvl);
       setPath(state.path);
       setCurrentBudget(state.budget);
       setInitialBudget(state.initialBudget);
@@ -97,14 +99,16 @@ const App: React.FC = () => {
 
   // --- 3. Core Logic ---
 
-  const initNewLevel = useCallback((level: LevelData, index: number) => {
-    const sPos = level.start || DEFAULT_START(level.grid.length);
-    const ePos = level.end || DEFAULT_END(Math.max(...level.grid.map(r => r.length)));
+  const initNewLevel = useCallback((rawLevel: LevelData, index: number) => {
+    const level = normalizeLevel(rawLevel);
+    const grid = level.grid || [];
+    const sPos = level.start || DEFAULT_START(grid.length);
+    const ePos = level.end || DEFAULT_END(Math.max(...grid.map(r => r.length), 0));
     
     // Explicit Budget Calculation
     let budget = level.budget;
     if (!budget || budget <= 0) {
-      const minCost = findMinPathCost(level.grid, sPos, ePos);
+      const minCost = findMinPathCost(grid, sPos, ePos);
       budget = minCost === -1 ? 20 : minCost + BUFFER_COST;
     }
     if (budget < 5) budget = 10; // Safety floor
@@ -131,7 +135,11 @@ const App: React.FC = () => {
       if (existingIndex === 0) return;
       const newPath = path.slice(0, existingIndex);
       setPath(newPath);
-      const costUsed = newPath.slice(1).reduce((acc, curr) => acc + currentLevel.grid[curr.row][curr.col], 0);
+      const grid = currentLevel.grid || [];
+      const costUsed = newPath.slice(1).reduce((acc, curr) => {
+        const row = grid[curr.row];
+        return acc + (row ? row[curr.col] : 0);
+      }, 0);
       setCurrentBudget(initialBudget - costUsed);
       return;
     }
