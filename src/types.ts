@@ -1,6 +1,12 @@
 import * as S from "@effect/schema/Schema";
 
 /**
+ * Cost Schema: 0-15 (Hexadecimal range)
+ */
+export const Cost = S.Number.pipe(S.between(0, 15));
+export type Cost = S.Schema.Type<typeof Cost>;
+
+/**
  * Coordinate Schema
  */
 export const Coordinate = S.Struct({
@@ -13,13 +19,13 @@ export type Coordinate = S.Schema.Type<typeof Coordinate>;
  * HexData Schema
  */
 export const HexData = S.Struct({
-  cost: S.Number,
+  cost: Cost,
   coord: Coordinate
 });
 export type HexData = S.Schema.Type<typeof HexData>;
 
 /**
- * GameStatus Schema (as a string-based enum replacement)
+ * GameStatus
  */
 export const GameStatus = {
   PLAYING: 'PLAYING',
@@ -36,17 +42,24 @@ export type GameStatus = S.Schema.Type<typeof GameStatusSchema>;
 
 /**
  * LevelData Schema
- * Supports both traditional number[][] and compressed string notation
+ * - gradient: The source of truth (required)
+ * - grid: The parsed representation (populated at runtime)
  */
 export const LevelData = S.Struct({
   id: S.Union(S.String, S.Number),
   description: S.optional(S.String),
   budget: S.Number,
-  // We'll support both for transition, eventually migrating to just string
-  grid: S.optional(S.Array(S.Array(S.Number))),
-  gradient: S.optional(S.String), 
+  gradient: S.String, // Now required
+  grid: S.optional(S.Array(S.Array(Cost))), 
   start: S.optional(Coordinate),
   end: S.optional(Coordinate),
+  /**
+   * Name of the tileset folder in /public/assets/tilesets/
+   */
+  tileset: S.optional(S.String),
+  /**
+   * Maps a character in the gradient (e.g. '4') to a visual template name (e.g. 'concentric')
+   */
   templateMap: S.optional(S.Record({ key: S.String, value: S.String }))
 });
 export type LevelData = S.Schema.Type<typeof LevelData>;

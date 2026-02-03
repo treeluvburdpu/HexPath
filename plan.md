@@ -9,10 +9,16 @@ To support multiple games and a map designer, we will move away from monolithic 
     - Automatic TypeScript types.
     - Safe serialization for the Map Designer.
 
-## 2. Component Modularity
-- **Atomic Hex/Tile Components:** Refactor `Hexagon.tsx` into a base `Tile` that accepts "Layers" (Background, SVG Template, Interaction, Decorator).
-- **Template System:** Create a registry of SVG templates with associated metadata (e.g., `Forest` template = cost 5, `Road` = cost 1).
-- **Context-Aware Rendering:** Use a `GameContext` or an Effect-based store to let tiles know if they are in "Play Mode" or "Design Mode".
+## 2. Component Modularity & Asset Pipeline
+- **Asset-Driven Tiles:** Use a structured folder system in `/public/assets/tilesets/[set-name]/[cost].svg` (0-F).
+- **Atomic Hex Rendering:** Refactor `Hexagon.tsx` to handle:
+    - **Base Layer:** Loading external SVG via `<image>` tag.
+    - **Procedural Layer:** Fallback generator for concentric rings (using 10% minimal size padding to prevent number occlusion).
+    - **Interaction Layer:** Transparent polygon covering the entire hex area for reliable hit detection.
+    - **Visual Hierarchy:** Layering path indicators and selections on top of tileset assets.
+- **Visual Refinements:**
+    - Cost numbers at 70% opacity for clear visibility without overpowering assets.
+    - Dynamic darkening/stacking logic for procedural "concentric" templates.
 
 ## 3. Map Designer Feature
 - **State Serialization:** Use Effect Schema to `encode/decode` the map state to JSON/Base64 for sharing.
