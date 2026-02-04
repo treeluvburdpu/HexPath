@@ -76,3 +76,15 @@ export const GameLogEntry = S.Struct({
   levelData: LevelData
 });
 export type GameLogEntry = S.Schema.Type<typeof GameLogEntry>;
+
+/**
+ * Z-Index Layers for SVG Rendering
+ */
+export const Layer = {
+  BACKGROUND: 0,
+  HEATMAP: 1,
+  TOPOGRAPHY: 2,
+  SELECTION: 3,
+  FOREGROUND: 4
+} as const;
+export type Layer = typeof Layer[keyof typeof Layer];

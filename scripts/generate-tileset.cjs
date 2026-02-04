@@ -18,54 +18,46 @@ const getHexPoints = (cx, cy, r) => {
     return points.join(' ');
 };
 
-const generateSVG = (cost) => {
-    const size = 50;
+const getStepColor = (step) => {
+    if (step <= 1) return '#4ADE80';
+    const factor = (step - 1) / 14;
+    const hue = 140 - (factor * 110);
+    const lightness = 60 - (factor * 35);
+    const saturation = 70 - (factor * 25);
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+};
+
+const generateSymbol = (cost) => {
     const cx = 50;
     const cy = 50;
-    const r = 48; // Max radius
-    
+    const r = 48;
     const minPadding = r * 0.1;
     const usableR = r - minPadding;
 
-    const getStepColor = (step) => {
-        if (step <= 1) return '#4ADE80'; // Pure Green for step 1
-        
-        // factor: 0 at step 1, 1 at step 15
-        const factor = (step - 1) / 14;
-        
-        // Hue: 140 (Green) -> 30 (Brown)
-        const hue = 140 - (factor * 110);
-        // Lightness: 60% -> 25%
-        const lightness = 60 - (factor * 35);
-        // Saturation: 70% -> 45%
-        const saturation = 70 - (factor * 25);
-        
-        return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-    };
-
     let layers = '';
-    // If cost is 0, just the yellow base
     if (cost === 0) {
         layers = `<polygon points="${getHexPoints(cx, cy, r)}" fill="#FCD34D" />`;
     } else {
-        // Render layers from largest (outer) to smallest (inner)
         for (let i = 1; i <= cost; i++) {
-            // i=1: size=r, i=cost: size=minPadding + (usableR/cost)
             const ringR = minPadding + (usableR / cost) * (cost - i + 1);
-            const color = getStepColor(i);
-            layers += `<polygon points="${getHexPoints(cx, cy, ringR)}" fill="${color}" />\n    `;
+            layers += `<polygon points="${getHexPoints(cx, cy, ringR)}" fill="${getStepColor(i)}" />\n        `;
         }
     }
 
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    ${layers}
-</svg>`;
+    return `<symbol id="tile-${cost.toString(16)}" viewBox="0 0 100 100">
+        ${layers}
+    </symbol>`;
 };
 
+let symbols = '';
 for (let i = 0; i <= 15; i++) {
-    const svg = generateSVG(i);
-    const fileName = `${i.toString(16)}.svg`;
-    fs.writeFileSync(path.join(OUTPUT_DIR, fileName), svg);
-    console.log(`Generated ${fileName}`);
+    symbols += generateSymbol(i) + '\n    ';
 }
+
+const sprite = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+    ${symbols}
+</svg>`;
+
+fs.writeFileSync(path.join(OUTPUT_DIR, 'sprite.svg'), sprite);
+console.log('Generated sprite.svg');

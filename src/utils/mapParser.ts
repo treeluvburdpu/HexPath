@@ -10,9 +10,10 @@ export const parseGradient = (gradient: string): number[][] => {
   if (!trimmed) return [];
   return trimmed
     .split(/\n+/)
- // Corrected: Escaped newline character for regex
+    .map(row => row.trim())
+    .filter(row => row.length > 0) // Filter out empty lines
     .map(row => 
-      row.trim().split('').map(char => {
+      row.split('').map(char => {
         const val = parseInt(char, 16);
         return isNaN(val) ? 0 : val;
       })

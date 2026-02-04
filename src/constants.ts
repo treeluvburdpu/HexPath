@@ -11,10 +11,10 @@ export const INITIAL_LEVELS: LevelData[] = [
         budget: 10,
         tileset: "concentric",
         gradient: `
-            32320
-            21411
-            22242
-            15112
+            12321
+            21421
+            2a242
+            1f112
             01233
     `,
         start: { row: 4, col: 0 },

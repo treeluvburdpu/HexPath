@@ -40,6 +40,19 @@ describe('mapParser', () => {
     ]);
   });
 
+  it('filters out empty lines between rows', () => {
+    const gradient = `
+      12
+
+      34
+    `;
+    const grid = parseGradient(gradient);
+    expect(grid).toEqual([
+      [1, 2],
+      [3, 4]
+    ]);
+  });
+
   it('handles empty input', () => {
     expect(parseGradient('')).toEqual([]);
   });
